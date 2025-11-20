@@ -65,7 +65,7 @@ ALightAwarenessDemoCharacter::ALightAwarenessDemoCharacter()
 
 	Flashlight = CreateDefaultSubobject<USpotLightComponent>(TEXT("Flashlight"));
 	Flashlight->SetupAttachment(FollowCamera);  // 카메라 앞에 붙이기
-	Flashlight->Intensity = 5000.f;
+	Flashlight->Intensity = 20000.f;
 	Flashlight->AttenuationRadius = 1000.f;
 	Flashlight->InnerConeAngle = 20.f;
 	Flashlight->OuterConeAngle = 35.f;
