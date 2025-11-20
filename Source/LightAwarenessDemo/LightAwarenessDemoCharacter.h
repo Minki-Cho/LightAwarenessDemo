@@ -96,4 +96,17 @@ public:
 	/** Debug flag: draw light rays */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
 	bool bDrawLightDebug = false;
+
+	// 손전등용 SpotLight
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Flashlight")
+	TObjectPtr<class USpotLightComponent> Flashlight;
+
+	// On/Off 상태
+	bool bFlashlightOn = false;
+
+	// 스페이스바 입력 함수
+	void ToggleFlashlight();
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* FlashlightAction;
 };

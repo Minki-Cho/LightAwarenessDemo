@@ -62,6 +62,14 @@ ALightAwarenessDemoCharacter::ALightAwarenessDemoCharacter()
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
+
+	Flashlight = CreateDefaultSubobject<USpotLightComponent>(TEXT("Flashlight"));
+	Flashlight->SetupAttachment(FollowCamera);  // 카메라 앞에 붙이기
+	Flashlight->Intensity = 5000.f;
+	Flashlight->AttenuationRadius = 1000.f;
+	Flashlight->InnerConeAngle = 20.f;
+	Flashlight->OuterConeAngle = 35.f;
+	Flashlight->SetVisibility(false, true);
 }
 
 void ALightAwarenessDemoCharacter::BeginPlay()
@@ -105,6 +113,14 @@ void ALightAwarenessDemoCharacter::SetupPlayerInputComponent(UInputComponent* Pl
 
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ALightAwarenessDemoCharacter::Look);
+
+		EnhancedInputComponent->BindAction(
+			FlashlightAction,
+			ETriggerEvent::Started,
+			this,
+			&ALightAwarenessDemoCharacter::ToggleFlashlight
+		);
+
 	}
 	else
 	{
@@ -313,4 +329,10 @@ void ALightAwarenessDemoCharacter::UpdateLightLevel()
 			FString::Printf(TEXT("LightLevel: %.3f"), LightLevel)
 		);
 	}
+}
+
+void ALightAwarenessDemoCharacter::ToggleFlashlight()
+{
+	bFlashlightOn = !bFlashlightOn;
+	Flashlight->SetVisibility(bFlashlightOn, true);
 }
