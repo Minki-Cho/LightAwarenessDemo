@@ -193,124 +193,150 @@ bool ALightAwarenessDemoCharacter::IsLightOccluded(const FVector& From, const AA
 // Light Level Calculation
 float ALightAwarenessDemoCharacter::CalculateLightLevel()
 {
-	UWorld* World = GetWorld();
+	FVector P = GetActorLocation();
 
-	// --- PIE World 강제 적용 (필요한 경우) ---
-	for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
-	{
-		if (Ctx.WorldType == EWorldType::PIE)
-		{
-			World = Ctx.World();
-			break;
-		}
-	}
-
-	if (!World)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[LightSense] World is NULL!"));
-		return 0.f;
-	}
-
-	// ---- Config fallback ----
-	const float DistFalloffK = (Config ? Config->DistFalloffK : 10.f);
-	const float MaxPointWeight = (Config ? Config->MaxPointWeight : 1.f);
-	const float OccludedFactor = (Config ? Config->OccludedFactor : 0.2f);
-	const float LightNorm = (Config ? Config->LightNorm : 500.f);
-
-	FVector PlayerLoc = GetActorLocation();
+	if (!Config) return 0.f;
 
 	float Sum = 0.f;
 	int32 Count = 0;
 
-	// DEBUG: 월드 안의 LightComponent 개수 세기
-	int32 DebugPoint = 0;
-	int32 DebugSpot = 0;
+	auto Accum = [&](const TCHAR* Label, AActor* LightActor, float Val, float Dist)
+		{
+			if (Val <= 0.f) return;
+			Sum += Val;
+			Count++;
 
-	for (TActorIterator<AActor> It(World); It; ++It)
+			// 디버그 보기용
+			if (bDrawLightDebug && GEngine)
+			{
+				FString Msg = FString::Printf(
+					TEXT("%s: %s  Dist=%.0f  Val=%.2f"),
+					Label,
+					*LightActor->GetName(),
+					Dist,
+					Val
+				);
+				GEngine->AddOnScreenDebugMessage(-1, 0.f, FColor::Cyan, Msg);
+			}
+		};
+
+	// 1) PointLight
+	for (TActorIterator<APointLight> It(GetWorld()); It; ++It)
 	{
-		AActor* A = *It;
-		if (!A) continue;
+		APointLight* L = *It;
+		UPointLightComponent* LC = L->PointLightComponent;
+		if (!LC) continue;
 
-		if (A->FindComponentByClass<UPointLightComponent>())
-			DebugPoint++;
+		float Dist = FVector::Distance(P, L->GetActorLocation());
+		if (Dist > LC->AttenuationRadius) continue;
 
-		if (A->FindComponentByClass<USpotLightComponent>())
-			DebugSpot++;
+		float Raw = LC->Intensity / FMath::Max(Dist * Config->DistFalloffK, 1.f);
+		float Val = FMath::Clamp(Raw / Config->LightNorm, 0.f, Config->MaxPointWeight);
+
+		if (IsLightOccluded(P, L))
+			Val *= Config->OccludedFactor;
+
+		Accum(TEXT("Point"), L, Val, Dist);
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("DEBUG: Found PointLights=%d SpotLights=%d"), DebugPoint, DebugSpot);
-
-	// ----- 모든 Actor를 돌며 LightComponent 탐색 -----
-	for (TActorIterator<AActor> It(World); It; ++It)
+	// 2) SpotLight
+	for (TActorIterator<ASpotLight> It(GetWorld()); It; ++It)
 	{
-		AActor* Actor = *It;
-		if (!Actor) continue;
+		ASpotLight* L = *It;
+		USpotLightComponent* LC = L->SpotLightComponent;
+		if (!LC) continue;
 
-		// ========== POINT LIGHT ==========
-		if (UPointLightComponent* PLC = Actor->FindComponentByClass<UPointLightComponent>())
-		{
-			if (!PLC->IsRegistered()) continue;
+		FVector LPos = L->GetActorLocation();
+		FVector ToP = P - LPos;
+		float Dist = ToP.Length();
+		if (Dist > LC->AttenuationRadius) continue;
 
-			FVector LPos = PLC->GetComponentLocation();
-			float Dist = FVector::Distance(PlayerLoc, LPos);
+		FVector Fwd = L->GetActorForwardVector();
+		float CosTheta = FVector::DotProduct(Fwd, ToP.GetSafeNormal());
+		float Angle = FMath::RadiansToDegrees(
+			acosf(FMath::Clamp(CosTheta, -1.f, 1.f))
+		);
+		if (Angle > LC->OuterConeAngle) continue;
 
-			if (Dist <= PLC->AttenuationRadius)
+		auto Smooth = [](float A, float B, float T)
 			{
-				float Raw = PLC->Intensity / FMath::Max(Dist * DistFalloffK, 1.f);
-				float Val = FMath::Clamp(Raw / LightNorm, 0.f, MaxPointWeight);
+				float X = FMath::Clamp((T - A) / (B - A), 0.f, 1.f);
+				return X * X * (3.f - 2.f * X);
+			};
 
-				if (IsLightOccluded(PlayerLoc, Actor))
-					Val *= OccludedFactor;
+		float AngFactor =
+			1.f - Smooth(LC->InnerConeAngle * (1.f - Config->SpotSmooth),
+				LC->OuterConeAngle,
+				Angle);
 
-				UE_LOG(LogTemp, Warning,
-					TEXT("[POINT] %s | Intens=%.1f Dist=%.1f Raw=%.2f Val=%.2f"),
-					*Actor->GetName(), PLC->Intensity, Dist, Raw, Val);
+		float Raw = (LC->Intensity * AngFactor) /
+			FMath::Max(Dist * Config->DistFalloffK, 1.f);
+
+		float Val = FMath::Clamp(Raw / Config->LightNorm, 0.f, Config->MaxPointWeight);
+
+		if (IsLightOccluded(P, L))
+			Val *= Config->OccludedFactor;
+
+		Accum(TEXT("Spot"), L, Val, Dist);
+	}
+
+	if (Flashlight && Flashlight->IsVisible())
+	{
+		FVector LPos = Flashlight->GetComponentLocation();
+		FVector ToP = P - LPos;
+		float Dist = ToP.Length();
+
+		if (Dist <= Flashlight->AttenuationRadius)
+		{
+			// 각도 체크
+			FVector Fwd = Flashlight->GetForwardVector();
+			float CosTheta = FVector::DotProduct(Fwd, ToP.GetSafeNormal());
+			float Angle = FMath::RadiansToDegrees(acosf(FMath::Clamp(CosTheta, -1.f, 1.f)));
+			if (Angle <= Flashlight->OuterConeAngle)
+			{
+				// Smooth angle falloff
+				auto Smooth = [](float A, float B, float T)
+					{
+						float X = FMath::Clamp((T - A) / (B - A), 0.f, 1.f);
+						return X * X * (3.f - 2.f * X);
+					};
+
+				float AngFactor =
+					1.f - Smooth(
+						Flashlight->InnerConeAngle * (1.f - Config->SpotSmooth),
+						Flashlight->OuterConeAngle,
+						Angle
+					);
+
+				// 거리 감쇠
+				float Raw = (Flashlight->Intensity * AngFactor) /
+					FMath::Max(Dist * Config->DistFalloffK, 1.f);
+
+				float Val = FMath::Clamp(
+					Raw / Config->LightNorm,
+					0.f,
+					Config->MaxPointWeight
+				);
+
+				// ❗ Flashlight은 Occlusion 체크 금지 (항상 직접 들고 있으므로)
+				// Val 그대로 사용
 
 				Sum += Val;
 				Count++;
-			}
-		}
 
-		// ========== SPOT LIGHT ==========
-		if (USpotLightComponent* SLC = Actor->FindComponentByClass<USpotLightComponent>())
-		{
-			if (!SLC->IsRegistered()) continue;
-
-			FVector LPos = SLC->GetComponentLocation();
-			FVector ToPlayer = PlayerLoc - LPos;
-			float Dist = ToPlayer.Length();
-
-			if (Dist <= SLC->AttenuationRadius)
-			{
-				FVector Forward = SLC->GetComponentRotation().Vector();
-				float CosTheta = FVector::DotProduct(Forward, ToPlayer.GetSafeNormal());
-				float Angle = FMath::RadiansToDegrees(acosf(FMath::Clamp(CosTheta, -1.f, 1.f)));
-
-				if (Angle <= SLC->OuterConeAngle)
+				if (bDrawLightDebug)
 				{
-					float Raw = SLC->Intensity / FMath::Max(Dist * DistFalloffK, 1.f);
-					float Val = FMath::Clamp(Raw / LightNorm, 0.f, MaxPointWeight);
-
-					if (IsLightOccluded(PlayerLoc, Actor))
-						Val *= OccludedFactor;
-
-					UE_LOG(LogTemp, Warning,
-						TEXT("[SPOT] %s | Intens=%.1f Dist=%.1f Angle=%.1f Raw=%.2f Val=%.2f"),
-						*Actor->GetName(), SLC->Intensity, Dist, Angle, Raw, Val);
-
-					Sum += Val;
-					Count++;
+					GEngine->AddOnScreenDebugMessage(
+						-1, 0.f, FColor::Blue,
+						FString::Printf(TEXT("[Flashlight] Dist=%.0f  Val=%.2f"), Dist, Val)
+					);
 				}
 			}
 		}
 	}
 
-	float Final = (Count > 0 ? Sum / Count : 0.f);
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("LightLevel FINAL = %.3f (Count %d)"), Final, Count);
-
-	return Final;
+	float Avg = (Count > 0 ? Sum / Count : 0.f);
+	return FMath::Clamp(Avg, 0.f, 1.f);
 }
 
 //////////////////////////////////////////////////////////////////////////
