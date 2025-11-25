@@ -1,4 +1,4 @@
-﻿#include "EnemyAIController.h"
+#include "EnemyAIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BehaviorTree.h"
@@ -24,7 +24,6 @@ void AEnemyAIController::OnPossess(APawn* InPawn)
         return;
     }
 
-    // ⭐ 플레이어 가져오기 — BT 시작 전에 반드시 세팅!
     AActor* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
     if (Player)
     {

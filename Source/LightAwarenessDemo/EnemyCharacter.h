@@ -19,7 +19,6 @@ public:
     virtual void BeginPlay() override;
     virtual void Tick(float DeltaTime) override;
 
-    // ⭐ Behavior Tree asset
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AI")
     TObjectPtr<UBehaviorTree> BehaviorTree;
 
