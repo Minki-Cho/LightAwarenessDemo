@@ -104,7 +104,7 @@ Lighting primarily affects how quickly the AI moves between these states.
 
 ---
 
-## 🤖 Integration with Unreal AI
+## Integration with Unreal AI
 
 - Detection values are written to **Blackboard keys**
 - Behavior Tree tasks read `LightVisibility` and `IsDetected`
