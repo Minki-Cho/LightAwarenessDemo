@@ -1,5 +1,11 @@
 # Light-Based Awareness System for AI Detection (Unreal Engine)
 
+### Demo Video
+
+[**👉 Press here to see demo video**](http://minki-portfolio.info/wp-content/uploads/2025/12/LightAwarenessDemo.mp4)
+
+[![Light Awareness Demo](https://github.com/user-attachments/assets/f7055788-377f-40aa-9979-63a3357f352c)](http://minki-portfolio.info/wp-content/uploads/2025/12/LightAwarenessDemo.mp4)
+
 > A light-aware AI detection system for stealth gameplay, implemented in Unreal Engine using C++ and Blueprints.
 
 ---
