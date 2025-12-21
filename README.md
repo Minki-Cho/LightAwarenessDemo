@@ -41,7 +41,7 @@ All tuning values are stored in a shared **configuration data asset**, allowing 
 
 ---
 
-## 🔬 Light Sampling Pipeline
+## Light Sampling Pipeline
 
 For each AI agent, the system performs a sphere scan centered on the character’s position and evaluates nearby light sources.
 
@@ -62,7 +62,7 @@ The raw value is then normalized and clamped to avoid extreme spikes caused by v
 
 ---
 
-## ⚙️ Configuration & Tuning
+## Configuration & Tuning
 
 All scalar parameters are stored in a `LightAwarenessConfig` data asset:
 
@@ -86,7 +86,7 @@ This makes tuning fast and safe, without touching code.
 
 ---
 
-## 👁️ AI Detection Model
+## AI Detection Model
 
 Visibility is not treated as a binary state. Instead, AI maintains a continuous **DetectionLevel** in `[0, 100]`.
 
@@ -115,7 +115,7 @@ This modular approach allows easy integration into existing AI setups.
 
 ---
 
-## 🧩 Implementation Highlights
+## Implementation Highlights
 
 ### Core Light Sampling (C++)
 
